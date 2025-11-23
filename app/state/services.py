@@ -21,6 +21,7 @@ import app.settings
 import app.state
 from app._typing import IPAddress
 from app.adapters.database import Database
+from app.adapters.omajinai import Omajinai
 from app.logging import Ansi
 from app.logging import log
 
@@ -45,6 +46,11 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
     datadog = datadog_client.ThreadStats()  # type: ignore[no-untyped-call]
 
 ip_resolver: IPResolver
+
+omajinai: Omajinai = Omajinai(
+    base_url=app.settings.OMAJINAI_BASE_URL,
+    http_client=http_client,
+)
 
 """ session usecases """
 

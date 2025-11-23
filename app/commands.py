@@ -514,8 +514,8 @@ async def _with(ctx: Context) -> str | None:
         score_args.acc = acc
         msg_fields.append(f"{acc:.2f}%")
 
-    result = app.usecases.performance.calculate_performances(
-        osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
+    result = await app.usecases.performance.calculate_performances(
+        beatmap_id=bmap.id,
         scores=[score_args],  # calculate one score
     )
 

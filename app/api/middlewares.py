@@ -18,6 +18,13 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
+        # HACK: quick fix for tunnel
+        cf_connecting_ip = request.headers.get("CF-Connecting-IP")
+        if cf_connecting_ip and "X-Real-IP" not in request.headers:
+            headers = list(request.scope["headers"])
+            headers.append((b"x-real-ip", cf_connecting_ip.encode()))
+            request.scope["headers"] = headers
+
         start_time = time.perf_counter_ns()
         response = await call_next(request)
         end_time = time.perf_counter_ns()

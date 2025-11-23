@@ -69,5 +69,7 @@ LOG_WITH_COLORS = read_bool(os.environ["LOG_WITH_COLORS"])
 ##          you could put your server at risk.
 DEVELOPER_MODE = read_bool(os.environ["DEVELOPER_MODE"])
 
+OMAJINAI_BASE_URL = os.environ["OMAJINAI_BASE_URL"]
+
 with open("pyproject.toml", "rb") as f:
     VERSION = tomllib.load(f)["tool"]["poetry"]["version"]

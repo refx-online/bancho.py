@@ -5,23 +5,17 @@ build:
 	docker build -t bancho:latest .
 
 run:
-	docker compose up bancho mysql redis
+	docker compose up bancho mysql redis cloudflared
 
 run-bg:
-	docker compose up -d bancho mysql redis
-
-run-cfd:
-	docker compose -f docker-compose.cloudflared.yml up
-
-run-cfd-bg:
-	docker compose -f docker-compose.cloudflared.yml up -d
+	docker compose up -d bancho mysql redis cloudflared
 
 run-caddy:
 	caddy run --envfile .env --config ext/Caddyfile
 
 last?=1
 logs:
-	docker compose logs -f bancho mysql redis --tail ${last}
+	docker compose logs -f bancho mysql redis cloudflared --tail ${last}
 
 shell:
 	poetry shell

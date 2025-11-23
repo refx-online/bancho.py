@@ -8,17 +8,14 @@ from pathlib import Path as SystemPath
 from typing import Literal
 
 from fastapi import APIRouter
-from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
 from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
-from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
 import app.packets
 import app.state
-import app.usecases.performance
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -30,7 +27,6 @@ from app.repositories import stats as stats_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.repositories import users as users_repo
-from app.usecases.performance import ScoreParams
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -58,92 +54,15 @@ http_bearer_scheme = HTTPBearer(auto_error=False)
 # GET /get_match: return information for a given multiplayer match.
 # GET /get_leaderboard: return the top players for a given mode & sort condition
 
-# Authorized (requires valid api key, passed as 'Authorization' header)
-# GET /calculate_pp: calculate & return pp for a given beatmap.
-
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 
 @router.get("/calculate_pp")
-async def api_calculate_pp(
-    token: HTTPCredentials | None = Depends(http_bearer_scheme),
-    beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
-    nkatu: int = Query(None, max=2_147_483_647),
-    ngeki: int = Query(None, max=2_147_483_647),
-    n100: int = Query(None, max=2_147_483_647),
-    n50: int = Query(None, max=2_147_483_647),
-    misses: int = Query(0, max=2_147_483_647),
-    mods: int = Query(0, min=0, max=2_147_483_647),
-    mode: int = Query(0, min=0, max=11),
-    combo: int = Query(None, max=2_147_483_647),
-    acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
-) -> Response:
+async def api_calculate_pp() -> Response:
     """Calculates the PP of a specified map with specified score parameters."""
 
-    if token is None or app.state.sessions.api_keys.get(token.credentials) is None:
-        return ORJSONResponse(
-            {"status": "Invalid API key."},
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    beatmap = await Beatmap.from_bid(beatmap_id)
-    if not beatmap:
-        return ORJSONResponse(
-            {"status": "Beatmap not found."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    osu_file_available = await ensure_osu_file_is_available(
-        beatmap.id,
-        expected_md5=beatmap.md5,
-    )
-    if not osu_file_available:
-        return ORJSONResponse(
-            {"status": "Beatmap file could not be fetched."},
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    scores = []
-
-    if all(x is None for x in [ngeki, nkatu, n100, n50]):
-        scores = [
-            ScoreParams(GameMode(mode).as_vanilla, mods, combo, acc, nmiss=misses)
-            for acc in acclist
-        ]
-    else:
-        scores.append(
-            ScoreParams(
-                GameMode(mode).as_vanilla,
-                mods,
-                combo,
-                ngeki=ngeki or 0,
-                nkatu=nkatu or 0,
-                n100=n100 or 0,
-                n50=n50 or 0,
-                nmiss=misses,
-            ),
-        )
-
-    results = app.usecases.performance.calculate_performances(
-        str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
-        scores,
-    )
-
-    # "Inject" the accuracy into the list of results
-    final_results = [
-        performance_result | {"accuracy": score.acc}
-        for performance_result, score in zip(results, scores)
-    ]
-
-    return ORJSONResponse(
-        # XXX: change the output type based on the inputs from user
-        (
-            final_results
-            if all(x is None for x in [ngeki, nkatu, n100, n50])
-            else final_results[0]
-        ),
-        status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
-    )
+    # i also need to do something on omajinai too!
+    return Response("use omajinai for pp calculations")
 
 
 @router.get("/search_players")

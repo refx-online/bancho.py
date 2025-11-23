@@ -16,10 +16,11 @@ services:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - db-data:/var/lib/mysql
     healthcheck:
-      test: '/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute "SHOW DATABASES;"'
-      interval: 2s
-      timeout: 20s
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u $$MYSQL_USER --password=$$MYSQL_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 10
+      start_period: 60s
 
   redis:
     image: redis:8.2.2
@@ -33,19 +34,20 @@ services:
       - -c
       - |
         if [ -n "$${REDIS_PASS}" ]; then
-          redis-server --requirepass "$${REDIS_PASS}"
+          redis-server --requirepass "$${REDIS_PASS}" --port ${REDIS_PORT}
         else
-          redis-server
+          redis-server --port ${REDIS_PORT}
         fi
 
   # Cloudflare tunneling via Zero-Trust
-  # cloudflared:
-  #   container_name: cloudflared
-  #   image: cloudflare/cloudflared:2025.9.1
-  #   restart: unless-stopped
-  #   command: tunnel run
-  #   environment:
-  #     - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+  cloudflared:
+    container_name: cloudflared
+    image: cloudflare/cloudflared:2025.9.1
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - TUNNEL_LOGLEVEL=info
 
   ## application services
 

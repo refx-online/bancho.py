@@ -316,7 +316,10 @@ class Score:
         assert num_better_scores is not None
         return num_better_scores + 1
 
-    def calculate_performance(self, beatmap_id: int) -> tuple[float, float]:
+    async def calculate_performance(
+        self,
+        beatmap_id: int,
+    ) -> tuple[float, float, float]:
         """Calculate PP and star rating for our score."""
         mode_vn = self.mode.as_vanilla
 
@@ -324,20 +327,18 @@ class Score:
             mode=mode_vn,
             mods=int(self.mods),
             combo=self.max_combo,
-            ngeki=self.ngeki,
-            n300=self.n300,
-            nkatu=self.nkatu,
-            n100=self.n100,
-            n50=self.n50,
+            acc=self.acc,
+            legacy_score=self.score,
             nmiss=self.nmiss,
         )
 
-        result = app.usecases.performance.calculate_performances(
-            osu_file_path=str(BEATMAPS_PATH / f"{beatmap_id}.osu"),
-            scores=[score_args],
+        pp, stars, hypo = await app.usecases.performance.calculate_performance_single(
+            beatmap_id=beatmap_id,
+            score=score_args,
+            hypothetical=True,
         )
 
-        return result[0]["performance"]["pp"], result[0]["difficulty"]["stars"]
+        return pp, stars, hypo
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
