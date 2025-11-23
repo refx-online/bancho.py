@@ -216,7 +216,7 @@ create table scores
 		primary key,
 	map_md5 char(32) not null,
 	score int not null,
-	pp float(7,3) not null,
+	pp float(10,3) not null,
 	acc float(6,3) not null,
 	max_combo int not null,
 	mods int not null,

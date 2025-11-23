@@ -1,6 +1,6 @@
 # This file contains any sql updates, along with the
 # version they are required from. Touching this without
-# at least reading utils/updater.py is certainly a bad idea :)
+# at least reading app/state/services.py is certainly a bad idea :)
 
 # v3.0.6
 alter table users change name_safe safe_name varchar(32) not null;
@@ -475,3 +475,6 @@ create index users_country_index
 # v5.2.2
 create index scores_fetch_leaderboard_generic_index
 	on scores (map_md5, status, mode);
+
+# v5.3.1
+alter table scores modify column pp double(10,3) not null;
