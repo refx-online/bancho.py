@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import hashlib
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
@@ -9,14 +8,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import app.state
-import app.usecases.performance
-import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.repositories import scores as scores_repo
-from app.usecases.performance import ScoreParams
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -209,85 +205,6 @@ class Score:
 
         return s
 
-    @classmethod
-    def from_submission(cls, data: list[str]) -> Score:
-        """Create a score object from an osu! submission string."""
-        s = cls()
-
-        """ parse the following format
-        # 0  online_checksum
-        # 1  n300
-        # 2  n100
-        # 3  n50
-        # 4  ngeki
-        # 5  nkatu
-        # 6  nmiss
-        # 7  score
-        # 8  max_combo
-        # 9  perfect
-        # 10 grade
-        # 11 mods
-        # 12 passed
-        # 13 gamemode
-        # 14 play_time # yyMMddHHmmss
-        # 15 osu_version + (" " * client_flags)
-        """
-
-        s.client_checksum = data[0]
-        s.n300 = int(data[1])
-        s.n100 = int(data[2])
-        s.n50 = int(data[3])
-        s.ngeki = int(data[4])
-        s.nkatu = int(data[5])
-        s.nmiss = int(data[6])
-        s.score = int(data[7])
-        s.max_combo = int(data[8])
-        s.perfect = data[9] == "True"
-        s.grade = Grade.from_str(data[10])
-        s.mods = Mods(int(data[11]))
-        s.passed = data[12] == "True"
-        s.mode = GameMode.from_params(int(data[13]), s.mods)
-        s.client_time = datetime.strptime(data[14], "%y%m%d%H%M%S")
-        s.client_flags = ClientFlags(data[15].count(" ") & ~4)
-
-        s.server_time = datetime.now()
-
-        return s
-
-    def compute_online_checksum(
-        self,
-        osu_version: str,
-        osu_client_hash: str,
-        storyboard_checksum: str,
-    ) -> str:
-        """Validate the online checksum of the score."""
-        assert self.player is not None
-        assert self.bmap is not None
-
-        return hashlib.md5(
-            "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}{8}{9}{10}{11}Q{12}{13}{15}{14:%y%m%d%H%M%S}{16}{17}".format(
-                self.n100 + self.n300,
-                self.n50,
-                self.ngeki,
-                self.nkatu,
-                self.nmiss,
-                self.bmap.md5,
-                self.max_combo,
-                self.perfect,
-                self.player.name,
-                self.score,
-                self.grade.name,
-                int(self.mods),
-                self.passed,
-                self.mode.as_vanilla,
-                self.client_time,
-                osu_version,  # 20210520
-                osu_client_hash,
-                storyboard_checksum,
-                # yyMMddHHmmss
-            ).encode(),
-        ).hexdigest()
-
     """Methods to calculate internal data for a score."""
 
     async def calculate_placement(self) -> int:
@@ -315,128 +232,6 @@ class Score:
         )
         assert num_better_scores is not None
         return num_better_scores + 1
-
-    async def calculate_performance(
-        self,
-        beatmap_id: int,
-    ) -> tuple[float, float, float]:
-        """Calculate PP and star rating for our score."""
-        mode_vn = self.mode.as_vanilla
-
-        score_args = ScoreParams(
-            mode=mode_vn,
-            mods=int(self.mods),
-            combo=self.max_combo,
-            acc=self.acc,
-            legacy_score=self.score,
-            nmiss=self.nmiss,
-        )
-
-        pp, stars, hypo = await app.usecases.performance.calculate_performance_single(
-            beatmap_id=beatmap_id,
-            score=score_args,
-            hypothetical=True,
-        )
-
-        return pp, stars, hypo
-
-    async def calculate_status(self) -> None:
-        """Calculate the submission status of a submitted score."""
-        assert self.player is not None
-        assert self.bmap is not None
-
-        recs = await scores_repo.fetch_many(
-            user_id=self.player.id,
-            map_md5=self.bmap.md5,
-            mode=self.mode,
-            status=SubmissionStatus.BEST,
-        )
-
-        if recs:
-            rec = recs[0]
-
-            # we have a score on the map.
-            # save it as our previous best score.
-            self.prev_best = await Score.from_sql(rec["id"])
-            assert self.prev_best is not None
-
-            # if our new score is better, update
-            # both of our score's submission statuses.
-            # NOTE: this will be updated in sql later on in submission
-            if self.pp > rec["pp"]:
-                self.status = SubmissionStatus.BEST
-                self.prev_best.status = SubmissionStatus.SUBMITTED
-            else:
-                self.status = SubmissionStatus.SUBMITTED
-        else:
-            # this is our first score on the map.
-            self.status = SubmissionStatus.BEST
-
-    def calculate_accuracy(self) -> float:
-        """Calculate the accuracy of our score."""
-        mode_vn = self.mode.as_vanilla
-
-        if mode_vn == 0:  # osu!
-            total = self.n300 + self.n100 + self.n50 + self.nmiss
-
-            if total == 0:
-                return 0.0
-
-            return (
-                100.0
-                * ((self.n300 * 300.0) + (self.n100 * 100.0) + (self.n50 * 50.0))
-                / (total * 300.0)
-            )
-
-        elif mode_vn == 1:  # osu!taiko
-            total = self.n300 + self.n100 + self.nmiss
-
-            if total == 0:
-                return 0.0
-
-            return 100.0 * ((self.n100 * 0.5) + self.n300) / total
-
-        elif mode_vn == 2:  # osu!catch
-            total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
-
-            if total == 0:
-                return 0.0
-
-            return 100.0 * (self.n300 + self.n100 + self.n50) / total
-
-        elif mode_vn == 3:  # osu!mania
-            total = (
-                self.n300 + self.n100 + self.n50 + self.ngeki + self.nkatu + self.nmiss
-            )
-
-            if total == 0:
-                return 0.0
-
-            if self.mods & Mods.SCOREV2:
-                return (
-                    100.0
-                    * (
-                        (self.n50 * 50.0)
-                        + (self.n100 * 100.0)
-                        + (self.nkatu * 200.0)
-                        + (self.n300 * 300.0)
-                        + (self.ngeki * 305.0)
-                    )
-                    / (total * 305.0)
-                )
-
-            return (
-                100.0
-                * (
-                    (self.n50 * 50.0)
-                    + (self.n100 * 100.0)
-                    + (self.nkatu * 200.0)
-                    + ((self.n300 + self.ngeki) * 300.0)
-                )
-                / (total * 300.0)
-            )
-        else:
-            raise Exception(f"Invalid vanilla mode {mode_vn}")
 
     """ Methods for updating a score. """
 
