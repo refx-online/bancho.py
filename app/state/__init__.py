@@ -22,3 +22,4 @@ packets: dict[Literal["all", "restricted"], dict[ClientPackets, type[BasePacket]
     "restricted": {},
 }
 shutting_down = False
+pubsubs: dict[str, PUBSUB_HANDLER] = {}

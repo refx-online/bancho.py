@@ -22,6 +22,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import ClientDisconnect
 
 import app.bg_loops
+import app.redis
 import app.settings
 import app.state
 import app.utils
@@ -99,6 +100,8 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
     await collections.initialize_ram_caches()
 
     await app.bg_loops.initialize_housekeeping_tasks()
+
+    await app.redis.initialize_pubsubs()
 
     log("Startup process complete.", Ansi.LGREEN)
     log(
