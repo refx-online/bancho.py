@@ -22,6 +22,7 @@ from fastapi import Response
 from fastapi.param_functions import Header
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 
 import app.packets
 import app.settings
@@ -87,30 +88,79 @@ FIRST_USER_ID = 3
 
 router = APIRouter(tags=["Bancho API"])
 
+CHO_GET_RESP = """
+<!DOCTYPE html>
+<style>
+body {{
+    background: black;
+    color: gray;
+    font-family: monospace;
+    overflow-x: hidden;
+}}
+#art {{
+    position: relative;
+    white-space: pre;
+    animation: sailLeft 5s linear infinite;
+}}
+
+@keyframes sailLeft {{
+    0% {{
+        left: -100vw;
+    }}
+    100% {{
+        left: 100%;
+    }}
+}}
+</style>
+<body>
+<pre>
+          _____                    _____                    _____
+         /\\    \\                  /\\    \\                  /\\    \\                 ______
+        /::\\    \\                /::\\    \\                /::\\    \\               |::|   |
+       /::::\\    \\              /::::\\    \\              /::::\\    \\              |::|   |
+      /::::::\\    \\            /::::::\\    \\            /::::::\\    \\             |::|   |
+     /:::/\\:::\\    \\          /:::/\\:::\\    \\          /:::/\\:::\\    \\            |::|   |
+    /:::/__\\:::\\    \\        /:::/__\\:::\\    \\        /:::/__\\:::\\    \\           |::|   |
+   /::::\\   \\:::\\    \\      /::::\\   \\:::\\    \\      /::::\\   \\:::\\    \\          |::|   |
+  /::::::\\   \\:::\\    \\    /::::::\\   \\:::\\    \\    /::::::\\   \\:::\\    \\         |::|   |
+ /:::/\\:::\\   \\:::\\____\\  /:::/\\:::\\   \\:::\\    \\  /:::/\\:::\\   \\:::\\    \\  ______|::|___|___ ____
+/:::/  \\:::\\   \\:::|    |/:::/__\\:::\\   \\:::\\____\\/:::/  \\:::\\   \\:::\\____\\|:::::::::::::::::|    |
+\\::/   |::::\\  /:::|____|\\:::\\   \\:::\\   \\::/    /\\::/    \\:::\\   \\::/    /|:::::::::::::::::|____|
+ \\/____|:::::\\/:::/    /  \\:::\\   \\:::\\   \\/____/  \\/____/ \\:::\\   \\/____/  ~~~~~~|::|~~~|~~~
+       |:::::::::/    /    \\:::\\   \\:::\\    \\               \\:::\\    \\            |::|   |
+       |::|\\::::/    /      \\:::\\   \\:::\\____\\               \\:::\\____\\           |::|   |
+       |::| \\::/____/        \\:::\\   \\::/    /                \\::/    /           |::|   |
+       |::|  ~|               \\:::\\   \\/____/                  \\/____/            |::|   |
+       |::|   |                \\:::\\    \\                                         |::|   |
+       \\::|   |                 \\:::\\____\\                                        |::|   |
+        \\:|   |                  \\::/    /                                        |::|___|
+         \\|___|                   \\/____/                                          ~~
+</pre>
+running on gulag/bancho.py (edited) and prayers<br>
+<pre id="art">
+                 .  o ..
+                 o . o o.o
+                      ...oo
+                        __[]__          vroom vroooooommmm
+                     __|_o_o_o\\__
+                     \\\"\"\"\"\"\"\"\"\"\"/
+                      \\. ..  . /
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+</pre>
+see whos online: <a href="/online">https://c.{domain}/online</a><br>
+ongoing matches: <a href="/matches">https://c.{domain}/matches</a><br>
+web: <a href="https://{domain}">https://{domain}</a><br>
+</body>
+</html>"""
+
 
 @router.get("/")
 async def bancho_http_handler() -> Response:
     """Handle a request from a web browser."""
-    new_line = "\n"
-    matches = [m for m in app.state.sessions.matches if m is not None]
-    players = [p for p in app.state.sessions.players if not p.is_bot_client]
-
-    packets = app.state.packets["all"]
-
     return HTMLResponse(
-        f"""
-<!DOCTYPE html>
-<body style="font-family: monospace; white-space: pre-wrap;">Running bancho.py v{app.settings.VERSION}
-
-<a href="online">{len(players)} online players</a>
-<a href="matches">{len(matches)} matches</a>
-
-<b>packets handled ({len(packets)})</b>
-{new_line.join([f"{packet.name} ({packet.value})" for packet in packets])}
-
-<a href="https://github.com/osuAkatsuki/bancho.py">Source code</a>
-</body>
-</html>""",
+        CHO_GET_RESP.format(
+            domain=BASE_DOMAIN,
+        ),
     )
 
 
@@ -181,6 +231,26 @@ matches:
     )
 
 
+@router.get("/infos")
+async def bancho_view_infos() -> Response:
+    """Get server information"""
+    data = {
+        "version": 1,
+        "latestClientVersion": "20240206.2",
+        "motd": "Welcome aboard. aeris player!",
+        "onlineUsers": len(
+            [
+                player
+                for player in app.state.sessions.players
+                if not player.is_bot_client
+            ],
+        ),
+        "icon": f"https://{BASE_DOMAIN}/static/favicon.png",
+    }
+
+    return JSONResponse(data)
+
+
 @router.post("/")
 async def bancho_handler(
     request: Request,
@@ -210,7 +280,10 @@ async def bancho_handler(
         # tell their client to reconnect immediately.
         return Response(
             content=(
-                app.packets.notification("Server has restarted.")
+                app.packets.notification(
+                    "You don't seem to be logged into refx anymore... "
+                    "This is common during server restarts, trying to log you back in.",
+                )
                 + app.packets.restart_server(0)  # ms until reconnection
             ),
         )
@@ -271,26 +344,20 @@ class ChangeAction(BasePacket):
 
         self.mods = reader.read_u32()
         self.mode = reader.read_u8()
-        if self.mods & Mods.RELAX:
-            if self.mode == 3:  # rx!mania doesn't exist
-                self.mods &= ~Mods.RELAX
-            else:
-                self.mode += 4
-        elif self.mods & Mods.AUTOPILOT:
-            if self.mode in (1, 2, 3):  # ap!catch, taiko and mania don't exist
-                self.mods &= ~Mods.AUTOPILOT
-            else:
-                self.mode += 8
 
         self.map_id = reader.read_i32()
 
     async def handle(self, player: Player) -> None:
         # update the user's status.
         player.status.action = Action(self.action)
-        player.status.info_text = self.info_text
+        player.status.info_text = player.resolve_info_text(self.info_text)
         player.status.map_md5 = self.map_md5
-        player.status.mods = Mods(self.mods)
-        player.status.mode = GameMode(self.mode)
+
+        mode, mods = player.resolve_mode_mods(self.mode, self.mods)
+
+        player.status.mods = Mods(mods)
+        player.status.mode = GameMode(mode)
+
         player.status.map_id = self.map_id
 
         # broadcast it to all online players.
@@ -554,6 +621,8 @@ def parse_osu_version_string(osu_version_string: str) -> OsuVersion | None:
         ),
         revision=int(match["revision"]) if match["revision"] else None,
         stream=OsuStream(match["stream"] or "stable"),
+        refx=match["ver"] == "Re;fx b",
+        refx_dev=match["stream"] == "dev",
     )
     return osu_version
 
@@ -591,6 +660,137 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
             break
 
     return allowed_client_versions
+
+
+REFX_LATEST_CLIENT_HASH = "230cd99998f1a18dbc787612179bae0e"
+
+
+async def check_old_client(
+    headers: Mapping[str, str],
+    login_data: LoginData,
+    osu_version: OsuVersion,
+) -> dict | None:
+    if osu_version.refx_dev:
+        return None
+
+    # loki please add an identifier for your clients
+
+    if str(osu_version) == "b20240721.1":
+        # this is a stable version of aeris client
+        return None
+
+    if str(osu_version) == "b20250210.4":
+        # this is a beta version of aeris client
+        return None
+
+    if login_data["osu_path_md5"] not in REFX_LATEST_CLIENT_HASH and osu_version.refx:
+        # NOTE: this is spoofable
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.notification("please run updater.")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if headers.get("ainu"):
+        # ainu client 2020
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("Wow calm down aoba.")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if str(osu_version) in (
+        "0Ainu",
+        "b20190326.2",
+        "b20190401.22f56c084ba339eefd9c7ca4335e246f80",
+        "b20191223.3",
+    ):
+        # ainu client 2019
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("Wow calm down aoba.")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if str(osu_version) not in ("b20190226.2", "b20190716.5"):
+        # hqOsu
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("What the hell are you trying to do?")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if str(osu_version) == "b20200304.1":
+        # og skooter?
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("What the hell are you trying to do?")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if str(osu_version) == "b20240729.2":
+        # skooter+
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("Where did you even get that client.")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if str(osu_version) == "b20221029.2":
+        # version frequently used by maple crack mpgh user.
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("Remove that malicious crack.")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if str(osu_version) == "b20240102.2":
+        # osu!fx
+        return {
+            "osu_token": "client-too-old",
+            "response_body": (
+                app.packets.version_update()
+                + app.packets.notification("Wow. can we forget osu!fx?")
+                + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+            ),
+        }
+
+    if app.settings.DISALLOW_OLD_CLIENTS and not osu_version.refx:
+        allowed_client_versions = await get_allowed_client_versions(osu_version.stream)
+        # in the case where the osu! api fails, we'll allow the client to connect
+        if (
+            allowed_client_versions is not None
+            and osu_version.date not in allowed_client_versions
+        ):
+            return {
+                "osu_token": "client-too-old",
+                "response_body": (
+                    app.packets.version_update()
+                    + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
+                ),
+            }
+
+    return None
 
 
 def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
@@ -665,22 +865,12 @@ async def handle_osu_login_request(
             ),
         }
 
-    if app.settings.DISALLOW_OLD_CLIENTS:
-        allowed_client_versions = await get_allowed_client_versions(
-            osu_version.stream,
-        )
-        # in the case where the osu! api fails, we'll allow the client to connect
-        if (
-            allowed_client_versions is not None
-            and osu_version.date not in allowed_client_versions
-        ):
-            return {
-                "osu_token": "client-too-old",
-                "response_body": (
-                    app.packets.version_update()
-                    + app.packets.login_reply(LoginFailureReason.OLD_CLIENT)
-                ),
-            }
+    if res := await check_old_client(
+        headers=headers,
+        login_data=login_data,
+        osu_version=osu_version,
+    ):
+        return res
 
     adapters, running_under_wine = parse_adapters_string(login_data["adapters_str"])
     if not (running_under_wine or any(adapters)):
@@ -2222,3 +2412,37 @@ class ToggleBlockingDMs(BasePacket):
         player.pm_private = self.value == 1
 
         player.update_latest_activity_soon()
+
+
+CHEATS = 1 << 1
+
+
+@register(ClientPackets.IDENTIFY_AERIS, restricted=True)
+class AerisIdentify(BasePacket):
+    def __init__(self, reader: BanchoPacketReader):
+        self.features = reader.read_i32()
+
+    async def handle(self, player: Player) -> None:
+        player.enqueue(app.packets.identify_aeris(CHEATS))
+        log(
+            f"user {player.name} ({player.id}) is using an Aeris client with the flags {self.features}",
+            Ansi.BLUE,
+        )
+        player.aeris = True
+
+
+@register(ClientPackets.REFX_LEADERBOARD, restricted=True)
+class IdentifyREFX(BasePacket):
+    def __init__(self, reader: BanchoPacketReader):
+        # cheat: 1/2
+        # cheatcheat: 5/6
+        self.current_leaderboard = reader.read_i32()
+
+    async def handle(self, player: Player) -> None:
+        # TODO: should i separate this to a different packet?
+        # since this is really getting frequently called
+        player.refx = True
+
+        # HACK: current me doesn't know how to handle cheat checking, so i do this
+        # for future me: FIXME!
+        player.refx_current_leaderboard = self.current_leaderboard

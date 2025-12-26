@@ -134,10 +134,14 @@ class OsuVersion:
         date: date,
         revision: int | None,  # TODO: should this be optional?
         stream: OsuStream,
+        refx: bool,
+        refx_dev: bool,
     ) -> None:
         self.date = date
         self.revision = revision
         self.stream = stream
+        self.refx = refx
+        self.refx_dev = refx_dev
 
 
 class ClientDetails:
@@ -276,6 +280,11 @@ class Player:
         self.spectating: Player | None = None
         self.match: Match | None = None
         self.stealth = False
+
+        self.aeris = False
+
+        self.refx = False
+        self.refx_current_leaderboard: int | None = None
 
         self.pres_filter = PresenceFilter.Nil
 
@@ -1015,3 +1024,64 @@ class Player:
                 sender_id=bot.id,
             ),
         )
+
+    def resolve_info_text(self, info_text: str) -> str:
+        """Resolve info text based on player's client and mods"""
+        # NOTE: done first since there isnt
+        # RX + AP mods on the client
+        if self.refx:
+            return info_text + " [refx]"
+
+        match self.status.mods:
+            case mods if mods & Mods.RELAX:
+                info_text += " [RX]"
+            case mods if mods & Mods.AUTOPILOT:
+                info_text += " [AP]"
+            case mods if mods & Mods.TOUCHSCREEN:
+                info_text += " [TD]"
+            case _:
+                info_text += " [VN]"
+
+        if self.aeris:
+            info_text += " [aeris]"
+
+        return info_text
+
+    def resolve_mode_mods(self, mode: int, mods: int) -> tuple[int, int]:
+        """resolve mode & mods based on player flags + special mods"""
+        if self.refx:
+            if self.refx_current_leaderboard in (1, 2):  # cheat/cheatselectedmod
+                return 12, mods
+            if self.refx_current_leaderboard in (
+                5,
+                6,
+            ):  # cheatcheat/cheatcheatselectedmod
+                return 16, mods
+
+            return mode, mods
+
+        if self.aeris:
+            return 16, mods  # cheatcheat since tw
+
+        # new special case for td players
+        # absolutely 0 people will play on this lb!
+        if mods & Mods.TOUCHSCREEN:
+            return 20, mods
+
+        if mods & Mods.RELAX:
+            if mode == 3:
+                mods &= ~Mods.RELAX
+            elif mode in (0, 1, 2):
+                mode += 4
+            elif mode in (4, 5, 6):
+                pass
+            else:
+                mods &= ~Mods.RELAX
+
+        if mods & Mods.AUTOPILOT:
+            if mode == 0 and not (mods & Mods.RELAX):
+                mode = 8
+            else:
+                mods &= ~Mods.AUTOPILOT
+
+        return mode, mods

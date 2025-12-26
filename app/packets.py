@@ -96,8 +96,20 @@ class ClientPackets(IntEnum):
     TOURNAMENT_JOIN_MATCH_CHANNEL = 108
     TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
 
+    IDENTIFY_AERIS = 126
+
+    REFX_LEADERBOARD = 138
+
     def __repr__(self) -> str:
         return f"<{self.name} ({self.value})>"
+
+    @classmethod
+    def _missing_(cls, value) -> None:
+        # XXX:  this most likely happens because of spectator frame
+        #       or an user somehow logged with an ancient client and sent very old/unused packets
+        # TODO: is this really the ok way to handle it?
+        #       because i still have other better way to handle it
+        return cls.UNKNOWN_PACKET
 
 
 @unique
@@ -164,6 +176,14 @@ class ServerPackets(IntEnum):
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.value})>"
+
+    @classmethod
+    def _missing_(cls, value) -> None:
+        # XXX:  this most likely happens because of spectator frame
+        #       or an user somehow logged with an ancient client and sent very old/unused packets
+        # TODO: is this really the ok way to handle it?
+        #       because i still have other better way to handle it
+        return cls.UNKNOWN_PACKET
 
 
 @unique
@@ -1291,3 +1311,8 @@ def switch_tournament_server(ip: str) -> bytes:
     # not on the client's normal endpoints,
     # but we can send it either way xd.
     return write(ServerPackets.SWITCH_TOURNAMENT_SERVER, (ip, osuTypes.string))
+
+
+# packet id: 127
+def identify_aeris(version: int) -> bytes:
+    return write(ServerPackets.IDENTIFY_AERIS, (version, osuTypes.i32))

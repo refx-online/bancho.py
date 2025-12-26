@@ -178,7 +178,6 @@ def init_routes(asgi_app: BanchoAPI) -> None:
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
             asgi_app.host(f"{subdomain}.{domain}", domains.cho.router)
 
-        asgi_app.host(f"osu.{domain}", domains.osu.router)
         asgi_app.host(f"b.{domain}", domains.map.router)
 
         # bancho.py's developer-facing api

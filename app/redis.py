@@ -17,7 +17,6 @@ from app.objects.score import Score
 def register_pubsub(channel: str) -> Callable[[PUBSUB_HANDLER], PUBSUB_HANDLER]:
     def decorator(handler: PUBSUB_HANDLER) -> PUBSUB_HANDLER:
         app.state.pubsubs[channel] = handler
-        log(f"Registered pub/sub handler for channel: {channel}", Ansi.CYAN)
 
         return handler
 
@@ -59,11 +58,19 @@ async def announce(payload: str) -> None:
 @register_pubsub("refx:restrict")
 async def restrict(payload: str) -> None:
     user_id, reason = payload.split("|")
-    player = await app.state.sessions.players.from_cache_or_sql(user_id)
+    player = await app.state.sessions.players.from_cache_or_sql(int(user_id))
 
-    player.restrict(app.state.sessions.bot, reason)
+    player.restrict(app.state.sessions.bot, str(reason))
 
     log("served restrict!", Ansi.GREEN)
+
+
+@register_pubsub("refx:notify")
+async def notify(payload: str) -> None:
+    user_id, message = payload.split("|")
+    player: Player = app.state.sessions.players.get(id=int(user_id))
+
+    player.enqueue(app.packets.notification(str(message)))
 
 
 async def loop_pubsubs(pubsub: PubSub) -> None:
@@ -79,7 +86,10 @@ async def loop_pubsubs(pubsub: PubSub) -> None:
 
                 handler = app.state.pubsubs.get(channel)
                 if handler is not None:
-                    await handler(payload)
+                    try:
+                        await handler(payload)
+                    except:
+                        ...
 
             await asyncio.sleep(0.01)
         except TimeoutError:

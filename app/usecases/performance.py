@@ -48,7 +48,7 @@ async def calculate_performances(
         )
 
         return {
-            "performance": {"pp": result.pp},
+            "performance": {"pp": result.pp, "hypothetical_pp": result.hypothetical_pp},
             "difficulty": {"stars": result.stars},
         }
 
@@ -56,35 +56,3 @@ async def calculate_performances(
     # each calculation is independent of the others
     # and the performance gain is *GODLY*
     return await asyncio.gather(*[_(score) for score in scores])
-
-
-async def calculate_performance_single(
-    beatmap_id: int,
-    score: ScoreParams,
-    hypothetical: bool = False,
-) -> tuple[float, float, float | None]:
-    """
-    Calculate performance for a single score on a beatmap.
-
-    If `hypothetical` is True, also calculate the hypothetical performance
-    assuming a full combo with no misses.
-    """
-
-    scores = [score]
-
-    if hypothetical:
-        hypothetical_score = replace(score, combo=None, nmiss=0)
-        scores.append(hypothetical_score)
-
-    results = await calculate_performances(
-        beatmap_id=beatmap_id,
-        scores=scores,
-    )
-    real = results[0]
-    hypo = results[1] if hypothetical else None
-
-    return (
-        real["performance"]["pp"],
-        real["difficulty"]["stars"],
-        hypo["performance"]["pp"] if hypo is not None else None,
-    )

@@ -10,6 +10,10 @@ class PerformanceResult:
     stars: float
     pp: float
 
+    # hypothetical, as it removes misses from the score
+    # and calculate the performance point and it results this.
+    hypothetical_pp: float
+
 
 @dataclass
 class PerformanceRequest:
@@ -55,6 +59,7 @@ class Omajinai:
         return {
             "stars": data["data"]["stars"],
             "pp": data["data"]["pp"],
+            "hypothetical_pp": data["data"]["hypothetical_pp"],
         }
 
     async def calculate_performance_single(
@@ -83,4 +88,5 @@ class Omajinai:
         return PerformanceResult(
             stars=data["stars"],
             pp=data["pp"],
+            hypothetical_pp=data["hypothetical_pp"],
         )

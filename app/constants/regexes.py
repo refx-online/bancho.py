@@ -3,8 +3,11 @@ from __future__ import annotations
 import re
 
 OSU_VERSION = re.compile(
-    r"^b(?P<date>\d{8})(?:\.(?P<revision>\d))?"
-    r"(?P<stream>beta|cuttingedge|dev|tourney)?$",
+    r"^(?P<ver>b|Re;fx b)"
+    r"(?P<date>\d{8})"
+    r"(?:\.(?P<revision>\d+))?"
+    r"(?P<stream>beta|cuttingedge|dev|tourney)?"
+    r"$",
 )
 
 USERNAME = re.compile(r"^[\w \[\]-]{2,15}$")
